@@ -3,6 +3,9 @@ use uuid::Uuid;
 
 use crate::{config::LiveConfig};
 
+#[cfg(feature = "sqlite-users")]
+use crate::database::{Database, UserRow};
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct User {
 	pub username: String,
@@ -12,10 +15,33 @@ pub struct User {
 }
 
 impl User {
+	/// Get user by email - YAML mode (default behavior)
+	#[cfg(not(feature = "sqlite-users"))]
 	pub fn from_email(config: &LiveConfig, email: &str) -> Option<Self> {
 		config.users
 			.iter()
 			.find(|u| u.email == email).cloned()
+	}
+
+	/// Get user by email - SQLite mode (requires sqlite-users feature)
+	#[cfg(feature = "sqlite-users")]
+	pub async fn from_email(config: &LiveConfig, email: &str, db: &Database) -> Option<Self> {
+		// Check if SQLite users are requested via config
+		if config.users_file.as_deref() == Some("sqlite") {
+			// Use SQLite storage
+			match UserRow::get_by_email(email, db).await {
+				Ok(user) => user,
+				Err(e) => {
+					tracing::error!("Failed to fetch user from SQLite: {}", e);
+					None
+				}
+			}
+		} else {
+			// Fallback to YAML for backwards compatibility
+			config.users
+				.iter()
+				.find(|u| u.email == email).cloned()
+		}
 	}
 
 	#[must_use]

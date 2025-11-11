@@ -1,0 +1,113 @@
+---
+# Production configuration for SQLite-based user storage
+# Based on config.sample.yaml with minimal changes for SQLite users
+# Requires building with: cargo build --features sqlite-users
+
+database_url: database.db
+
+# Host that the server will listen on
+listen_host: 0.0.0.0
+# Port that the server will listen on
+listen_port: 8080
+# Path prefix to prepend to the returned URLs (for weird proxied setups)
+path_prefix: /
+
+# URL that the server will be accessible at from the users
+#
+# NOTE: This MUST be a domain if webauthn is enabled, otherwise it will throw the following error:
+# rp_id is not an effective_domain of rp_origin
+external_url: http://localhost:8080
+
+# How long will the magic link be valid for (account for email delivery time too)
+link_duration: 1h
+# How long will a global session be valid for
+session_duration: 1mon
+
+# How often to run expired secrets cleanup
+secrets_cleanup_interval: 24h
+
+# Title of the authentication service, will be shown in the web UI and emails
+title: MagicEntry
+
+# Enable the auth-url functionality, which allows you to use MagicEntry
+# as an additional authentication layer for your existing services
+# You can use it as the only authentication layer if the application supports
+# Header-based authentication, OIDC or SAML
+auth_url_enable: true
+# The username header of the authenticated user
+auth_url_user_header: X-Remote-User
+# The full name header of the authenticated user
+auth_url_name_header: X-Remote-Name
+# The email header of the authenticated user
+auth_url_email_header: X-Remote-Email
+# The realms that this user has access to
+auth_url_realms_header: X-Remote-Realms
+
+# How long does an OIDC code last
+oidc_code_duration: 1m
+
+# Use SMTP to send the magic link to the user
+smtp_enable: false
+# SMTP server to use
+# For the URL scheme options see https://docs.rs/lettre/latest/lettre/transport/smtp/struct.AsyncSmtpTransport.html#method.from_url
+smtp_url: smtp://user@pass:localhost:25/?tls=required
+# SMTP "From" header
+smtp_from: "{title} <magicentry@example.com>"
+# SMTP subject
+smtp_subject: "{title} Login"
+# SMTP body
+smtp_body: "Click the link to login: {magic_link}"
+
+# Use a web request to send the magic link to the user
+request_enable: false
+# URL to send the request to
+request_url: https://www.cinotify.cc/api/notify
+# GET/POST data to send
+request_data: 'to={email}&subject={title} Login&body=Click the link to login: <a href="{magic_link}">Login</a>&type=text/html'
+# Request method to use
+request_method: POST
+# Request content type
+request_content_type: application/x-www-form-urlencoded
+
+# Enable the ability for the users to authenticate using passkeys
+webauthn_enable: true
+
+# CRITICAL CHANGE: Use SQLite for user storage instead of YAML
+# This replaces the 'users:' section from config.sample.yaml
+users_file: "sqlite"
+
+# Services that can use magicentry
+services:
+  # Service name (for cataloging)
+  - name: example
+    # URL of the service (for cataloging)
+    url: http://localhost:8080
+    # Realms of which users have access to
+    realms:
+      - example
+    # Auth-URL configuration (optional)
+    auth_url:
+      # Allowed origins that the client can be redirected to
+      # Omit the paths, only the scheme, host and port and a leading /
+      origins:
+        - https://openidconnect.net
+        - http://localhost:8080  # Used in the flow_scoped.rs test
+        - http://localhost:8081  # Used in hurl
+    # OIDC configuration (optional)
+    # All of the settings below are tightly coupled with the service config
+    oidc:
+      # OIDC client ID
+      client_id: my_client
+      # OIDC client secret
+      client_secret: my_secret
+      # OIDC redirect URLs
+      redirect_urls:
+        - https://openidconnect.net/callback
+
+    # SAML configuration (optional)
+    saml:
+      # The entity ID that will be used by the service
+      entity_id: example
+      # SAML redirect URLs
+      redirect_urls:
+        - https://openidconnect.net/

@@ -6,6 +6,7 @@ edition = "2024"
 [features]
 default = []
 kube = ["dep:kube", "dep:k8s-openapi"]
+sqlite-users = []
 
 [dependencies]
 serde_qs = { version = "0.15", features = ["axum"] }

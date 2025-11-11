@@ -23,7 +23,12 @@ pub async fn handle_auth_start(
 	let webauthn = state.webauthn.clone();
 
 	// TODO: Handle the errors to avoid leaking (in)valid emails
+	#[cfg(not(feature = "sqlite-users"))]
 	let user = User::from_email(&config, &form.email)
+		.ok_or(WebAuthnError::SecretNotFound)?;
+
+	#[cfg(feature = "sqlite-users")]
+	let user = User::from_email(&config, &form.email, &state.db).await
 		.ok_or(WebAuthnError::SecretNotFound)?;
 
 	let passkey_stores = PasskeyStore::get_by_user(&user, &state.db).await?;

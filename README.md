@@ -29,4 +29,43 @@ any other external service (like a database).
 It has no admin panel by choice and the only way to dynamically alter its configuration
 is by updating the configuration file or use ingress resource annotations.
 
+## 🗄️ User Storage Options
+
+MagicEntry supports two ways to manage user accounts:
+
+### YAML-based Users (Default)
+Users are defined in configuration files - either directly in `config.yaml` or in a separate file specified by `users_file`.
+
+```yaml
+users:
+  - username: admin
+    email: admin@example.com
+    name: Admin User
+    realms: [all]
+```
+
+### SQLite-based Users (Feature: `sqlite-users`)
+Users are stored in the SQLite database for dynamic management. Enable this feature at compile time:
+
+```bash
+# Build with SQLite users support
+cargo build --features sqlite-users
+
+# Configure to use SQLite storage
+users_file: "sqlite"
+```
+
+When `users_file: "sqlite"` is set and the `sqlite-users` feature is enabled, MagicEntry will read users from the `users` table in the SQLite database instead of YAML files. This provides a more dynamic approach for user management while maintaining read-only access for authentication purposes.
+
+**Configuration examples:**
+- `config.sqlite-users.yaml` - Example configuration for testing SQLite users
+- `config.production-sqlite.yaml` - Production-ready template based on config.sample.yaml
+
+**Populating users in SQLite:**
+```sql
+INSERT INTO users (username, email, name, realms) VALUES 
+    ('admin', 'admin@example.com', 'Admin User', '["all"]'),
+    ('user', 'user@example.com', 'Regular User', '["example"]');
+```
+
 Check out the documentation at [magicentry.rs](https://magicentry.rs).
