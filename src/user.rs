@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use std::sync::Arc;
 
-use crate::{config::LiveConfig};
-
-#[cfg(feature = "sqlite-users")]
-use crate::database::{Database, UserRow};
+use crate::config::LiveConfig;
+use crate::user_provider::{UserProvider, UserYAML, UserSQL};
+use crate::error::AppError;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct User {
@@ -15,33 +15,35 @@ pub struct User {
 }
 
 impl User {
-	/// Get user by email - YAML mode (default behavior)
-	#[cfg(not(feature = "sqlite-users"))]
-	pub fn from_email(config: &LiveConfig, email: &str) -> Option<Self> {
-		config.users
-			.iter()
-			.find(|u| u.email == email).cloned()
+	/// Create a UserProvider based on configuration
+	async fn create_provider(config: &LiveConfig) -> Result<Arc<dyn UserProvider>, AppError> {
+		// Check if SQL configuration is provided
+		if let Some(sql_config) = &config.users_sql {
+			let provider = UserSQL::new(&sql_config.connection, sql_config.query.clone()).await?;
+			Ok(Arc::new(provider))
+		} else {
+			// Fallback to YAML provider
+			let provider = UserYAML::new(config);
+			Ok(Arc::new(provider))
+		}
 	}
 
-	/// Get user by email - SQLite mode (requires sqlite-users feature)
-	#[cfg(feature = "sqlite-users")]
-	pub async fn from_email(config: &LiveConfig, email: &str, db: &Database) -> Option<Self> {
-		// Check if SQLite users are requested via config
-		if config.users_file.as_deref() == Some("sqlite") {
-			// Use SQLite storage
-			match UserRow::get_by_email(email, db).await {
-				Ok(user) => user,
-				Err(e) => {
-					tracing::error!("Failed to fetch user from SQLite: {}", e);
-					None
-				}
-			}
-		} else {
-			// Fallback to YAML for backwards compatibility
-			config.users
-				.iter()
-				.find(|u| u.email == email).cloned()
-		}
+	/// Get user by email using the configured provider
+	pub async fn from_email(config: &LiveConfig, email: &str) -> Result<Option<Self>, AppError> {
+		let provider = Self::create_provider(config).await?;
+		provider.get_user_by_email(email).await
+	}
+
+	/// Get all users using the configured provider
+	pub async fn list_all(config: &LiveConfig) -> Result<Vec<Self>, AppError> {
+		let provider = Self::create_provider(config).await?;
+		provider.list_all_users().await
+	}
+
+	/// Check if a user exists using the configured provider
+	pub async fn exists(config: &LiveConfig, email: &str) -> Result<bool, AppError> {
+		let provider = Self::create_provider(config).await?;
+		provider.user_exists(email).await
 	}
 
 	#[must_use]

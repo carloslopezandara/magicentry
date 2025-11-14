@@ -21,6 +21,16 @@ use crate::service::Services;
 use crate::user::User;
 use crate::{CONFIG, CONFIG_FILE};
 
+/// Configuration for SQL-based user provider
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct UserSQLConfig {
+    /// Database connection string (sqlite://, postgres://, mysql://, etc.)
+    pub connection: String,
+    /// SQL query to fetch users. Must return columns: email, username, name, realms
+    /// Example: "SELECT email, username, full_name as name, permissions as realms FROM users WHERE active = 1"
+    pub query: String,
+}
+
 /// The actual, deserialized config data
 ///
 /// To see what each field represents check out the [config.sample.yaml](https://github.com/dzervas/magicentry/blob/main/config.sample.yaml) file
@@ -80,7 +90,10 @@ pub struct Config {
 	// pub force_https_redirects: bool,
 	/// Path to a file containing the user definitions
 	pub users_file: Option<String>,
+	/// Traditional YAML-based user list
 	pub users: Vec<User>,
+	/// SQL-based user configuration (alternative to users/users_file)
+	pub users_sql: Option<UserSQLConfig>,
 	pub services: Services,
 }
 
@@ -133,6 +146,7 @@ impl Default for Config {
 
 			users_file: None,
 			users: vec![],
+			users_sql: None,
 
 			services: Services(vec![]),
         }
@@ -211,13 +225,12 @@ impl Config {
 			.expect("Failed to watch config file for changes");
 
 		// Watch users file if it exists in current config
-		if let Ok(config_guard) = CONFIG.try_read() {
-			if let Some(users_file) = &config_guard.users_file {
+		if let Ok(config_guard) = CONFIG.try_read()
+			&& let Some(users_file) = &config_guard.users_file {
 				watcher
 					.watch(Path::new(users_file), notify::RecursiveMode::NonRecursive)
 					.expect("Failed to watch users file for changes");
 			}
-		}
 
 		watcher
 	}

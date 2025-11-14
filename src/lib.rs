@@ -71,6 +71,7 @@ pub mod oidc;
 pub mod saml;
 pub mod service;
 pub mod user;
+pub mod user_provider;
 pub mod secret;
 pub mod utils;
 pub mod webauthn;

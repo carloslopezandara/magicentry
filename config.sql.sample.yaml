@@ -1,0 +1,88 @@
+# Sample configuration for MagicEntry using SQLite database for user storage
+
+# Server configuration
+host: "localhost"
+port: 8080
+public_url: "http://localhost:8080"
+
+# Database for storing secrets (required)
+database_url: "sqlite:data.db"
+
+# Optional: Configure additional features
+# otp_length: 6
+# otp_prefix: "MGC"
+# otp_expiry: 600  # in seconds
+
+# SQLite user storage configuration
+users_sql:
+  # Database connection string - supports multiple database types:
+  # - SQLite: "sqlite:database.db" 
+  # - PostgreSQL: "postgresql://user:pass@host/db"
+  # - MySQL: "mysql://user:pass@host/db"
+  connection_string: "sqlite:users.db"
+  
+  # Custom SQL query to fetch user data
+  # REQUIREMENTS:
+  #   1. Must be a SELECT statement
+  #   2. Must return these exact column names (use aliases to map):
+  #      - id: unique user identifier (will be used as username)
+  #      - email: user's email address
+  #      - name: user's display name  
+  #      - realms: user permissions/roles (JSON array or comma-separated string)
+  #   3. Query cannot be empty
+  #
+  # These 4 columns match the YAML structure:
+  #   YAML field    -> SQL column
+  #   username      -> id
+  #   email         -> email  
+  #   name          -> name
+  #   realms        -> realms
+  query: >
+    SELECT 
+      user_id as id,
+      email_address as email,
+      display_name as name,
+      permissions as realms
+    FROM users 
+    WHERE email_address = ?
+
+# Alternative SQL examples:
+
+# Example 1: PostgreSQL with JSON realms
+# users_sql:
+#   connection_string: "postgresql://user:pass@localhost/mydb"
+#   query: >
+#     SELECT 
+#       id::text as id,
+#       email,
+#       full_name as name,
+#       realms::text as realms
+#     FROM app_users 
+#     WHERE email = $1 AND active = true
+
+# Example 2: MySQL with comma-separated roles
+# users_sql:
+#   connection_string: "mysql://user:pass@localhost/mydb"
+#   query: >
+#     SELECT 
+#       CAST(user_id AS CHAR) as id,
+#       email_address as email,
+#       full_name as name,
+#       GROUP_CONCAT(role_name) as realms
+#     FROM users u
+#     JOIN user_roles ur ON u.id = ur.user_id
+#     JOIN roles r ON ur.role_id = r.id
+#     WHERE u.email_address = ? AND u.is_active = 1
+#     GROUP BY u.id, u.email_address, u.full_name
+
+# Example 3: Simple table matching expected schema
+# users_sql:
+#   connection_string: "sqlite:myapp.db"
+#   query: >
+#     SELECT 
+#       id,
+#       email,
+#       name,
+#       realms
+#     FROM magicentry_users 
+#     WHERE email = ?

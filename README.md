@@ -31,7 +31,7 @@ is by updating the configuration file or use ingress resource annotations.
 
 ## 🗄️ User Storage Options
 
-MagicEntry supports two ways to manage user accounts:
+MagicEntry supports flexible user storage to work with your existing infrastructure:
 
 ### YAML-based Users (Default)
 Users are defined in configuration files - either directly in `config.yaml` or in a separate file specified by `users_file`.
@@ -44,28 +44,59 @@ users:
     realms: [all]
 ```
 
-### SQLite-based Users (Feature: `sqlite-users`)
-Users are stored in the SQLite database for dynamic management. Enable this feature at compile time:
+### SQL Database Users 
+Connect MagicEntry to your existing user database without requiring schema changes. Configure any SQL query to fetch user data:
 
-```bash
-# Build with SQLite users support
-cargo build --features sqlite-users
-
-# Configure to use SQLite storage
-users_file: "sqlite"
+```yaml
+users_sql:
+  connection_string: "sqlite:users.db"  # Or PostgreSQL, MySQL, etc.
+  query: >
+    SELECT 
+      user_id as id,
+      email_address as email,
+      display_name as name,
+      permissions as realms
+    FROM users 
+    WHERE email_address = ?
 ```
 
-When `users_file: "sqlite"` is set and the `sqlite-users` feature is enabled, MagicEntry will read users from the `users` table in the SQLite database instead of YAML files. This provides a more dynamic approach for user management while maintaining read-only access for authentication purposes.
+**Requirements:** Your query must return exactly these four columns:
+- `id` - Unique user identifier (used as username)
+- `email` - User's email address  
+- `name` - User's display name
+- `realms` - User permissions/roles (JSON array or comma-separated string)
+
+**Validations:** MagicEntry automatically validates:
+- ✅ Connection string is not empty
+- ✅ Query is not empty  
+- ✅ Query is a SELECT statement
+- ✅ Query contains all required column names (id, email, name, realms)
+
+**Supported databases:**
+- SQLite: `sqlite:path/to/database.db`
+- PostgreSQL: `postgresql://user:pass@localhost/database` 
+- MySQL: `mysql://user:pass@localhost/database`
 
 **Configuration examples:**
-- `config.sqlite-users.yaml` - Example configuration for testing SQLite users
-- `config.production-sqlite.yaml` - Production-ready template based on config.sample.yaml
+- `config.sql.sample.yaml` - Complete example with multiple database scenarios
+- `users.sample.yaml` - YAML-based user configuration
 
-**Populating users in SQLite:**
+**Example queries for different schemas:**
 ```sql
-INSERT INTO users (username, email, name, realms) VALUES 
-    ('admin', 'admin@example.com', 'Admin User', '["all"]'),
-    ('user', 'user@example.com', 'Regular User', '["example"]');
+-- Simple mapping with JSON realms
+SELECT id, email, name, realms FROM app_users WHERE email = ?
+
+-- Complex join with comma-separated roles  
+SELECT 
+  CAST(u.user_id AS CHAR) as id,
+  u.email_address as email,
+  u.full_name as name,
+  GROUP_CONCAT(r.role_name) as realms
+FROM users u
+JOIN user_roles ur ON u.id = ur.user_id  
+JOIN roles r ON ur.role_id = r.id
+WHERE u.email_address = ? AND u.active = 1
+GROUP BY u.id, u.email_address, u.full_name
 ```
 
 Check out the documentation at [magicentry.rs](https://magicentry.rs).

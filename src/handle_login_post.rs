@@ -35,13 +35,12 @@ pub async fn handle_login_post(
 	let login_action_page = LoginActionPage.render().await;
 
 	// Return 200 to avoid leaking valid emails
-	#[cfg(not(feature = "sqlite-users"))]
-	let Some(user) = User::from_email(&config, &form.email) else {
-		return Ok(login_action_page.into_response());
-	};
-
-	#[cfg(feature = "sqlite-users")]
-	let Some(user) = User::from_email(&config, &form.email, &state.db).await else {
+	let Some(user) = User::from_email(&config, &form.email).await
+		.map_err(|e| {
+			tracing::error!("Failed to fetch user: {}", e);
+			e
+		})?
+	else {
 		return Ok(login_action_page.into_response());
 	};
 

@@ -6,7 +6,6 @@ edition = "2024"
 [features]
 default = []
 kube = ["dep:kube", "dep:k8s-openapi"]
-sqlite-users = []
 
 [dependencies]
 serde_qs = { version = "0.15", features = ["axum"] }
@@ -29,7 +28,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 notify = "8"
 rand = "0.9"
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid", "json"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "postgres", "mysql", "any", "chrono", "uuid", "json"] }
 reqwest = { version = "0.12", default-features = false, features = [
 	"rustls-tls",
 ] }

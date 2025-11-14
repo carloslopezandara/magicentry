@@ -71,8 +71,19 @@ request_content_type: application/x-www-form-urlencoded
 webauthn_enable: true
 
 # List of the users that can authenticate using the service
-# You can either list them here or load them from another file using `users_file`
+# You can either list them here, load them from another file using `users_file`,
+# or connect to a SQL database using `users_sql`
 # users_file: users.sample.yaml
+# users_sql:
+#   connection_string: "sqlite:users.db"
+#   query: >
+#     SELECT 
+#       user_id as id,
+#       email_address as email,
+#       display_name as name,
+#       permissions as realms
+#     FROM users 
+#     WHERE email_address = ?
 users:
   - username: valid
     name: Valid User
