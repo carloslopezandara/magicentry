@@ -45,6 +45,7 @@ fn create_mock_config() -> Config {
 		webauthn_enable: true,
 		users_file: None,
 		users: vec![],
+		users_sql: None,
 		services: crate::service::Services(vec![]),
 	}
 }

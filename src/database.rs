@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions, FromRow};
+use sqlx::{SqlitePool, sqlite::SqliteConnectOptions, FromRow, Row};
 use std::str::FromStr;
 
 use anyhow::Context as _;
@@ -39,11 +39,11 @@ pub struct PasskeyRow {
 impl PasskeyRow {
 	/// Save a passkey to the database
 	pub async fn save(&mut self, db: &Database) -> Result<(), AppError> {
-		let result = sqlx::query!(
-			"INSERT INTO passkeys (user_data, passkey_data) VALUES (?, ?)",
-			self.user_data,
-			self.passkey_data,
+		let result = sqlx::query(
+			"INSERT INTO passkeys (user_data, passkey_data) VALUES (?, ?)"
 		)
+		.bind(&self.user_data)
+		.bind(&self.passkey_data)
 		.execute(db)
 		.await
 		.context("Failed to execute database query")?;
@@ -57,16 +57,25 @@ impl PasskeyRow {
 		let user_str = serde_json::to_string(user)
 			.with_context(|| format!("Failed to serialize user data for passkey lookup: {}", user.email))?;
 
-		let rows = sqlx::query_as!(
-			Self,
-			"SELECT id, user_data, passkey_data, created_at FROM passkeys WHERE user_data = ?",
-			user_str
+		let rows = sqlx::query(
+			"SELECT id, user_data, passkey_data, created_at FROM passkeys WHERE user_data = ?"
 		)
+		.bind(user_str)
 		.fetch_all(db)
 		.await
-		.context("Failed to fetch passkeys from database")?;
+		.context("Failed to execute database query")?;
 
-		Ok(rows)
+		let mut result = Vec::new();
+		for row in rows {
+			result.push(Self {
+				id: Some(row.try_get("id").map_err(|e| AppError::from(anyhow::anyhow!("Failed to get id: {}", e)))?),
+				user_data: row.try_get("user_data").map_err(|e| AppError::from(anyhow::anyhow!("Failed to get user_data: {}", e)))?,
+				passkey_data: row.try_get("passkey_data").map_err(|e| AppError::from(anyhow::anyhow!("Failed to get passkey_data: {}", e)))?,
+				created_at: row.try_get("created_at").map_err(|e| AppError::from(anyhow::anyhow!("Failed to get created_at: {}", e)))?,
+			});
+		}
+
+		Ok(result)
 	}
 }
 
@@ -81,12 +90,12 @@ pub struct ConfigKVRow {
 impl ConfigKVRow {
 	/// Save or update a config KV pair
 	pub async fn save(&self, db: &Database) -> Result<(), AppError> {
-		sqlx::query!(
-			"INSERT INTO config_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP",
-			self.key,
-			self.value,
-			self.value,
+		sqlx::query(
+			"INSERT INTO config_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP"
 		)
+		.bind(&self.key)
+		.bind(&self.value)
+		.bind(&self.value)
 		.execute(db)
 		.await
 		.context("Failed to execute database query")?;
@@ -96,20 +105,22 @@ impl ConfigKVRow {
 	
 	/// Get a config value by key
 	pub async fn get(key: &str, db: &Database) -> Result<Option<String>, AppError> {
-		let row = sqlx::query!("SELECT value FROM config_kv WHERE key = ?", key)
-		.fetch_optional(db)
-		.await
-		.with_context(|| format!("Failed to fetch config value for key: {key}"))?;
+		let row = sqlx::query("SELECT value FROM config_kv WHERE key = ?")
+			.bind(key)
+			.fetch_optional(db)
+			.await
+			.with_context(|| format!("Failed to fetch config value for key: {key}"))?;
 		
-		Ok(row.map(|r| r.value))
+		Ok(row.map(|r| r.try_get::<String, _>("value").unwrap_or_default()))
 	}
 	
 	/// Remove a config KV pair by key
 	pub async fn remove(key: &str, db: &Database) -> Result<(), AppError> {
-		sqlx::query!("DELETE FROM config_kv WHERE key = ?", key)
-		.execute(db)
-		.await
-		.context("Failed to execute database query")?;
+		sqlx::query("DELETE FROM config_kv WHERE key = ?")
+			.bind(key)
+			.execute(db)
+			.await
+			.context("Failed to execute database query")?;
 
 		Ok(())
 	}

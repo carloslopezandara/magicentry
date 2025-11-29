@@ -8,6 +8,7 @@ use axum::routing::get;
 use axum::serve::Serve;
 use axum::Router;
 use hurl::util::logger::{LoggerOptionsBuilder, Verbosity};
+use sqlx::Row;
 use hurl::runner::{RunnerOptionsBuilder, Value};
 use hurl_core::input::Input;
 use tokio::net::TcpListener;
@@ -20,11 +21,11 @@ use crate::*;
 
 #[axum::debug_handler]
 async fn secrets_handler(State(state): State<AppState>) -> impl IntoResponse {
-	let data = sqlx::query!("SELECT code FROM user_secrets WHERE code LIKE 'me_ll_%' ORDER BY created_at DESC LIMIT 1")
+	let data = sqlx::query("SELECT code FROM user_secrets WHERE code LIKE 'me_ll_%' ORDER BY created_at DESC LIMIT 1")
 		.fetch_optional(&state.db)
 		.await
 		.unwrap()
-		.map(|row| row.code);
+		.map(|row| row.try_get::<String, _>("code").unwrap_or_default());
 
 	if let Some(code) = data {
 		let login_link = format!("/login/{code}");
@@ -141,7 +142,7 @@ pub async fn run_test(hurl_path: &str) {
 
 	// Dump user_secrets table for debugging
 	eprintln!("\n=== Dumping user_secrets table ===");
-	let secrets = sqlx::query!("SELECT code, user, metadata, expires_at, created_at FROM user_secrets ORDER BY created_at DESC")
+	let secrets = sqlx::query("SELECT code, user, metadata, expires_at, created_at FROM user_secrets ORDER BY created_at DESC")
 		.fetch_all(&db)
 		.await
 		.unwrap_or_else(|e| {
@@ -156,11 +157,11 @@ pub async fn run_test(hurl_path: &str) {
 		let nullstr = "<null>".to_string();
 		for (i, secret) in secrets.iter().enumerate() {
 			eprintln!("  {}:", i + 1);
-			eprintln!("    code: {}", secret.code);
-			eprintln!("    user: {}", secret.user);
-			eprintln!("    metadata: {}", secret.metadata.as_ref().unwrap_or(&nullstr));
-			eprintln!("    expires_at: {}", secret.expires_at);
-			eprintln!("    created_at: {}", secret.created_at.unwrap_or_else(chrono::NaiveDateTime::default));
+			eprintln!("    code: {}", secret.try_get::<String, _>("code").unwrap_or_default());
+			eprintln!("    user: {}", secret.try_get::<String, _>("user").unwrap_or_default());
+			eprintln!("    metadata: {}", secret.try_get::<Option<String>, _>("metadata").unwrap_or(None).unwrap_or(nullstr.clone()));
+			eprintln!("    expires_at: {}", secret.try_get::<chrono::NaiveDateTime, _>("expires_at").unwrap_or_default());
+			eprintln!("    created_at: {}", secret.try_get::<Option<chrono::NaiveDateTime>, _>("created_at").unwrap_or(None).unwrap_or_default());
 			eprintln!();
 		}
 	}

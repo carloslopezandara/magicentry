@@ -66,6 +66,14 @@ pub mod config;
 #[cfg(feature = "kube")]
 pub mod config_kube;
 pub mod database;
+pub mod database_abstraction;
+#[cfg(test)]
+pub mod database_abstraction_tests;
+#[cfg(test)]
+pub mod database_compatibility_demo;
+#[cfg(test)]
+pub mod database_security_tests;
+pub mod database_security_tests_offline;
 pub mod error;
 pub mod oidc;
 pub mod saml;

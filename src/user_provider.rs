@@ -5,8 +5,12 @@ use crate::error::AppError;
 pub mod yaml;
 pub mod sql;
 
+#[cfg(test)]
+pub mod tests;
+
 pub use yaml::UserYAML;
 pub use sql::UserSQL;
+pub use crate::database_abstraction::DatabaseType;
 
 /// Trait for providing user data from different sources (YAML, SQL, etc.)
 /// This allows MagicEntry to read users from the client's existing database

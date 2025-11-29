@@ -2820,6 +2820,7 @@ dependencies = [
  "openssl",
  "quick-xml",
  "rand 0.9.2",
+ "regex",
  "reqwest",
  "rsa",
  "scraper",

@@ -1,5 +1,6 @@
 use chrono::{NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 
 use crate::config::LiveConfig;
 use crate::error::{AppError, AuthError};
@@ -39,14 +40,14 @@ impl<K: UserSecretKind> InternalUserSecret<K> {
 		let user = serde_json::to_string(&self.user)?;
 		let metadata = serde_json::to_string(&self.metadata)?;
 
-		sqlx::query!(
-			"INSERT INTO user_secrets (code, user, metadata, expires_at) VALUES (?, ?, ?, ?)",
-			self.code,
-			user,
-			metadata,
-			self.expires_at,
+		sqlx::query(
+			"INSERT INTO user_secrets (code, user, metadata, expires_at) VALUES (?, ?, ?, ?)"
 		)
-			.execute(db)
+		.bind(&self.code)
+		.bind(&user)
+		.bind(&metadata)
+		.bind(&self.expires_at)
+		.execute(db)
 		.await?;
 
 		Ok(())
@@ -54,11 +55,11 @@ impl<K: UserSecretKind> InternalUserSecret<K> {
 
 	/// Get a secret from the database by code
 	async fn get(code: &SecretString, db: &Database) -> anyhow::Result<Option<Self>> {
-		let row = sqlx::query!(
-			r#"SELECT code, user, expires_at, created_at, metadata FROM user_secrets WHERE code = ? AND expires_at > datetime('now')"#,
-			code
+		let row = sqlx::query(
+			r#"SELECT code, user, expires_at, created_at, metadata FROM user_secrets WHERE code = ? AND expires_at > datetime('now')"#
 		)
-			.fetch_optional(db)
+		.bind(code)
+		.fetch_optional(db)
 		.await?;
 
 		let Some(row) = row else {
@@ -66,13 +67,14 @@ impl<K: UserSecretKind> InternalUserSecret<K> {
 		};
 
 		// Since the metadata column in the DB is nullable, we need to handle it
-		let metadata = serde_json::from_str(&row.metadata.unwrap_or_else(|| "null".to_string()))?;
+		let metadata_str: Option<String> = row.try_get("metadata")?;
+		let metadata = serde_json::from_str(&metadata_str.unwrap_or_else(|| "null".to_string()))?;
 
 		let obj = Self {
-			code: row.code.try_into()?,
-			user: serde_json::from_str(&row.user)?,
-			expires_at: row.expires_at,
-			created_at: row.created_at.unwrap_or_default(),
+			code: row.try_get::<String, _>("code")?.try_into()?,
+			user: serde_json::from_str(&row.try_get::<String, _>("user")?)?,
+			expires_at: row.try_get("expires_at")?,
+			created_at: row.try_get::<Option<chrono::NaiveDateTime>, _>("created_at")?.unwrap_or_default(),
 			metadata,
 		};
 
@@ -85,18 +87,21 @@ impl<K: UserSecretKind> InternalUserSecret<K> {
 
 	/// Check if a user secret exists
 	pub async fn exists(code: &SecretString, db: &Database) -> anyhow::Result<bool> {
-		let count: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM user_secrets WHERE code = ?", code)
+		let row = sqlx::query("SELECT COUNT(*) as count FROM user_secrets WHERE code = ?")
+			.bind(code)
 			.fetch_one(db)
-		.await?;
+			.await?;
 
+		let count: i64 = row.try_get("count")?;
 		Ok(count > 0)
 	}
 
 	/// Remove a user secret by ID
 	pub async fn remove(code: &SecretString, db: &Database) -> anyhow::Result<()> {
-		sqlx::query!("DELETE FROM user_secrets WHERE code = ?", code)
+		sqlx::query("DELETE FROM user_secrets WHERE code = ?")
+			.bind(code)
 			.execute(db)
-		.await?;
+			.await?;
 
 		Ok(())
 	}
